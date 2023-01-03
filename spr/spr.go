@@ -226,6 +226,51 @@ func (sd *stackediff) UpdatePullRequests(ctx context.Context, reviewers []string
 //  We than close all the pull requests which are below the merged request, as
 //  their commits have already been merged.
 func (sd *stackediff) MergePullRequests(ctx context.Context, count *uint) {
+	switch sd.config.Repo.IncrementalMerge {
+	case true:
+		sd.incrementalMergePullRequest(ctx, count)
+	case false:
+		sd.classicMergePullRequest(ctx, count)
+	}
+}
+
+func (sd *stackediff) incrementalMergePullRequest(ctx context.Context, count *uint) {
+	sd.profiletimer.Step("MergePullRequests::Start")
+	githubInfo := sd.github.GetInfo(ctx, sd.gitcmd)
+	sd.profiletimer.Step("MergePullRequests::getGitHubInfo")
+
+	mergeMethod, err := sd.config.MergeMethod()
+	check(err)
+
+	for prIndex := 0; prIndex < len(githubInfo.PullRequests); prIndex++ {
+		pr := githubInfo.PullRequests[prIndex]
+		if !pr.Mergeable(sd.config) {
+			break
+		}
+		if count != nil && (prIndex+1) == int(*count) {
+			break
+		}
+
+		// TODO: if previous PR has CODEOWNERS changes in it, we need to re-rebase this thing on master
+		// Alternatively just error when we get there maybe?
+
+		sd.profiletimer.Step("MergePullRequests::merge pr")
+		sd.github.MergePullRequest(ctx, pr, mergeMethod)
+		pr.Merged = true
+
+		if !sd.config.Repo.AutomaticMergedBranchDeletion {
+			// Ensure branch is deleted
+			deleteBranchCmd := fmt.Sprintf("git push %s --delete %s", sd.config.Repo.GitHubRemote, pr.FromBranch)
+			sd.mustgit(deleteBranchCmd, nil)
+		}
+
+		fmt.Fprintf(sd.output, "%s\n", pr.String(sd.config))
+	}
+
+	sd.profiletimer.Step("MergePullRequests::End")
+}
+
+func (sd *stackediff) classicMergePullRequest(ctx context.Context, count *uint) {
 	sd.profiletimer.Step("MergePullRequests::Start")
 	githubInfo := sd.github.GetInfo(ctx, sd.gitcmd)
 	sd.profiletimer.Step("MergePullRequests::getGitHubInfo")

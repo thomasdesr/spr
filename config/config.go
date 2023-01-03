@@ -27,6 +27,9 @@ type RepoConfig struct {
 	RequireChecks   bool `default:"true" yaml:"requireChecks"`
 	RequireApproval bool `default:"true" yaml:"requireApproval"`
 
+	IncrementalMerge              bool `default:"true" yaml:"incrementalMerge"`
+	AutomaticMergedBranchDeletion bool `default:"true" yaml:"automaticMergedBranchDeletion"` // TODO: Maybe we should pull this from the API?
+
 	GitHubRemote   string   `default:"origin" yaml:"githubRemote"`
 	GitHubBranch   string   `default:"master" yaml:"githubBranch"`
 	RemoteBranches []string `yaml:"remoteBranches"`
